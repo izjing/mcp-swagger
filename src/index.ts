@@ -93,6 +93,20 @@ function pickSuccessResponse(responses: any) {
   );
 }
 
+function isSwagger2(spec: any): boolean {
+  return spec.swagger && spec.swagger.startsWith("2.");
+}
+
+function getRequestBodySchemaV2(parameters: any[]) {
+  const bodyParam = parameters?.find((p: any) => p.in === "body");
+  return bodyParam?.schema || null;
+}
+
+function getResponseSchemaV2(responses: any) {
+  const success = pickSuccessResponse(responses);
+  return success?.schema || null;
+}
+
 function getJsonSchemaFromContent(content: any) {
   if (!content) return null;
   return content["application/json"]?.schema || content["application/*+json"]?.schema || content["*/*"]?.schema || null;
@@ -154,11 +168,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     const op = pathItem[m];
-    const parameters = [...(pathItem.parameters || []), ...(op.parameters || [])];
+    const allParameters = [...(pathItem.parameters || []), ...(op.parameters || [])];
 
-    const requestBodySchema = getJsonSchemaFromContent(op.requestBody?.content);
-    const success = pickSuccessResponse(op.responses);
-    const responseSchema = getJsonSchemaFromContent(success?.content);
+    let requestBodySchema: any = null;
+    let responseSchema: any = null;
+    let parameters: any[] = allParameters;
+
+    if (isSwagger2(spec)) {
+      // Swagger 2.0
+      requestBodySchema = getRequestBodySchemaV2(allParameters);
+      responseSchema = getResponseSchemaV2(op.responses);
+      // 过滤掉 body 参数，只保留 query/path/header 参数
+      parameters = allParameters.filter((p: any) => p.in !== "body");
+    } else {
+      // OpenAPI 3.0
+      requestBodySchema = getJsonSchemaFromContent(op.requestBody?.content);
+      const success = pickSuccessResponse(op.responses);
+      responseSchema = getJsonSchemaFromContent(success?.content);
+    }
 
     return {
       content: [
@@ -167,12 +194,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           text: JSON.stringify({
             found: true,
             swaggerUrl: SWAGGER_URL,
+            version: isSwagger2(spec) ? "2.0" : "3.x",
             path: matched,
             method: m,
             operationId: op.operationId || null,
             summary: op.summary || op.description || null,
             request: {
-              parameters,
+              parameters: deref(spec, parameters),
               body: requestBodySchema ? deref(spec, requestBodySchema) : null
             },
             response: responseSchema ? deref(spec, responseSchema) : null
