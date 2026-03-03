@@ -27,9 +27,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/mcp-swagger-schema"
+    "url": "https://github.com/izjing/mcp-swagger"
   },
-  "homepage": "https://github.com/your-username/mcp-swagger-schema#readme",
+  "homepage": "https://github.com/izjing/mcp-swagger#readme",
   "type": "module",
   "engines": {
     "node": ">=18"
