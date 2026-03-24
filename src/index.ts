@@ -146,7 +146,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const spec = await loadSpec();
 
-    const matched = matchPath(spec.paths || {}, path);
+    let matched = matchPath(spec.paths || {}, path);
+
+    // Swagger 2.0: paths key 可能包含 basePath 前缀，需要双向兼容
+    if (!matched && isSwagger2(spec) && spec.basePath && spec.basePath !== "/") {
+      const base = spec.basePath.replace(/\/$/, "");
+      if (!path.startsWith(base)) {
+        // 用户输入不含 basePath，尝试加上前缀再匹配
+        matched = matchPath(spec.paths || {}, base + path);
+      } else {
+        // 用户输入包含 basePath，尝试去掉前缀再匹配
+        matched = matchPath(spec.paths || {}, path.slice(base.length) || "/");
+      }
+    }
+
     if (!matched) {
       return { content: [{ type: "text", text: "未在 Swagger(OpenAPI) 中找到该 path" }] };
     }
